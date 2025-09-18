@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rabbi Nachman Voice Assistant - Version Fonctionnelle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #f6ad55;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-900 to-purple-900 text-white min-h-screen">
+
+    <!-- Header -->
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold text-center mb-2">Rabbi Nachman Voice Assistant</h1>
+        <h2 class="text-2xl text-center text-amber-400 mb-8">עוזר קולי רבי נחמן</h2>
+
+        <!-- Status -->
+        <div id="status" class="text-center mb-8">
+            <span class="text-green-400">● Connecté</span>
+            <span id="books-count" class="ml-4 text-gray-300">Chargement...</span>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 max-w-4xl">
+
+        <!-- Books Available -->
+        <div class="bg-black/20 rounded-lg p-6 mb-8">
+            <h3 class="text-xl font-semibold mb-4">📚 Livres Disponibles</h3>
+            <div id="books-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="text-gray-400">Chargement des livres...</div>
+            </div>
+        </div>
+
+        <!-- Query Interface -->
+        <div class="bg-black/20 rounded-lg p-6 mb-8">
+            <h3 class="text-xl font-semibold mb-4">🎤 Posez votre question</h3>
+
+            <!-- Input -->
+            <div class="flex gap-4 mb-4">
+                <input
+                    type="text"
+                    id="question-input"
+                    placeholder="Que dit Rabbi Nachman sur la joie ?"
+                    class="flex-1 px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-amber-400 focus:outline-none"
+                >
+                <button
+                    id="ask-button"
+                    class="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg transition-colors"
+                >
+                    Demander
+                </button>
+            </div>
+
+            <!-- Voice Button -->
+            <div class="text-center">
+                <button
+                    id="voice-button"
+                    class="w-20 h-20 bg-amber-600 hover:bg-amber-700 text-white rounded-full flex items-center justify-center text-2xl transition-all"
+                >
+                    🎤
+                </button>
+                <p class="text-sm text-gray-400 mt-2">Cliquez pour parler</p>
+            </div>
+        </div>
+
+        <!-- Response Area -->
+        <div id="response-area" class="hidden bg-black/20 rounded-lg p-6 mb-8">
+            <h3 class="text-xl font-semibold mb-4">💬 Réponse</h3>
+
+            <!-- Loading -->
+            <div id="loading" class="hidden text-center py-8">
+                <div class="spinner mx-auto mb-4"></div>
+                <p class="text-amber-400">Analyse en cours...</p>
+            </div>
+
+            <!-- Answer -->
+            <div id="answer-content" class="hidden">
+                <div id="answer-text" class="bg-gray-800/50 p-4 rounded-lg mb-4 whitespace-pre-wrap"></div>
+
+                <!-- Citations -->
+                <div id="citations" class="mb-4">
+                    <h4 class="font-semibold mb-2">📖 Sources citées :</h4>
+                    <div id="citations-list"></div>
+                </div>
+
+                <!-- Confidence -->
+                <div class="flex items-center gap-4">
+                    <span class="text-sm">Confiance :</span>
+                    <div class="flex-1 bg-gray-700 rounded-full h-2">
+                        <div id="confidence-bar" class="bg-amber-400 h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                    <span id="confidence-text" class="text-sm">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test API -->
+        <div class="bg-black/20 rounded-lg p-6">
+            <h3 class="text-xl font-semibold mb-4">🔧 Tests de Diagnostic</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button onclick="testAPI()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded">Test API</button>
+                <button onclick="testBooks()" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded">Test Livres</button>
+                <button onclick="testQuery()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded">Test Question</button>
+            </div>
+            <div id="test-results" class="mt-4 text-sm"></div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let availableBooks = [];
+        let isListening = false;
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Application chargée');
+            loadBooks();
+            setupEventListeners();
+        });
+
+        // Charger les livres disponibles
+        async function loadBooks() {
+            try {
+                const response = await fetch('/api/books');
+                const data = await response.json();
+
+                if (response.ok) {
+                    availableBooks = data.books;
+                    displayBooks(data.books);
+                    document.getElementById('books-count').textContent = `${data.total_books} livres disponibles`;
+                } else {
+                    throw new Error(`Erreur ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Erreur chargement livres:', error);
+                document.getElementById('books-list').innerHTML =
+                    '<div class="text-red-400">Erreur chargement des livres</div>';
+            }
+        }
+
+        // Afficher les livres
+        function displayBooks(books) {
+            const booksList = document.getElementById('books-list');
+            booksList.innerHTML = books.map(book => `
+                <div class="bg-gray-800/50 p-3 rounded-lg">
+                    <div class="font-semibold text-amber-400">${book.title}</div>
+                    <div class="text-sm text-gray-400">${book.total_chunks} chunks • ${book.total_tokens} tokens</div>
+                    <div class="text-xs text-gray-500 mt-1">${book.themes.join(', ') || 'Aucun thème'}</div>
+                </div>
+            `).join('');
+        }
+
+        // Configuration des event listeners
+        function setupEventListeners() {
+            // Bouton Demander
+            document.getElementById('ask-button').addEventListener('click', handleQuestion);
+
+            // Entrée clavier
+            document.getElementById('question-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    handleQuestion();
+                }
+            });
+
+            // Bouton vocal
+            document.getElementById('voice-button').addEventListener('click', toggleVoiceRecognition);
+        }
+
+        // Gérer une question
+        async function handleQuestion() {
+            const input = document.getElementById('question-input');
+            const question = input.value.trim();
+
+            if (!question) {
+                alert('Veuillez saisir une question');
+                return;
+            }
+
+            console.log('📝 Question:', question);
+
+            // Afficher loading
+            showLoading();
+
+            try {
+                const response = await fetch('/api/query/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question })
+                });
+
+                const data = await response.json();
+                console.log('📥 Réponse:', data);
+
+                if (response.ok) {
+                    displayAnswer(data);
+                } else {
+                    throw new Error(`Erreur ${response.status}: ${data.error || 'Erreur inconnue'}`);
+                }
+            } catch (error) {
+                console.error('❌ Erreur:', error);
+                showError(error.message);
+            }
+        }
+
+        // Afficher loading
+        function showLoading() {
+            document.getElementById('response-area').classList.remove('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('answer-content').classList.add('hidden');
+        }
+
+        // Afficher la réponse
+        function displayAnswer(data) {
+            // Masquer loading
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('answer-content').classList.remove('hidden');
+
+            // Afficher la réponse
+            document.getElementById('answer-text').textContent = data.answer || 'Aucune réponse disponible';
+
+            // Afficher les citations
+            const citationsList = document.getElementById('citations-list');
+            if (data.citations && data.citations.length > 0) {
+                citationsList.innerHTML = data.citations.map(citation => `
+                    <div class="text-sm text-green-400 mb-1">
+                        ✓ ${citation.reference} (${citation.book})
+                    </div>
+                `).join('');
+            } else {
+                citationsList.innerHTML = '<div class="text-gray-400 text-sm">Aucune citation disponible</div>';
+            }
+
+            // Afficher la confiance
+            const confidence = data.confidence || 0;
+            document.getElementById('confidence-bar').style.width = `${confidence}%`;
+            document.getElementById('confidence-text').textContent = `${confidence}%`;
+        }
+
+        // Afficher erreur
+        function showError(message) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('answer-content').classList.remove('hidden');
+            document.getElementById('answer-text').textContent = `Erreur: ${message}`;
+            document.getElementById('citations-list').innerHTML = '';
+            document.getElementById('confidence-bar').style.width = '0%';
+            document.getElementById('confidence-text').textContent = '0%';
+        }
+
+        // Reconnaissance vocale
+        function toggleVoiceRecognition() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('Reconnaissance vocale non supportée par votre navigateur');
+                return;
+            }
+
+            const button = document.getElementById('voice-button');
+
+            if (isListening) {
+                // Arrêter l'écoute
+                isListening = false;
+                button.textContent = '🎤';
+                button.classList.remove('bg-red-600');
+                button.classList.add('bg-amber-600');
+                return;
+            }
+
+            // Démarrer l'écoute
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+
+            recognition.lang = 'fr-FR';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            recognition.onstart = function() {
+                isListening = true;
+                button.textContent = '🔴';
+                button.classList.remove('bg-amber-600');
+                button.classList.add('bg-red-600');
+                console.log('🎤 Écoute en cours...');
+            };
+
+            recognition.onresult = function(event) {
+                const transcript = event.results[0][0].transcript;
+                console.log('🗣️ Reconnu:', transcript);
+                document.getElementById('question-input').value = transcript;
+                handleQuestion();
+            };
+
+            recognition.onend = function() {
+                isListening = false;
+                button.textContent = '🎤';
+                button.classList.remove('bg-red-600');
+                button.classList.add('bg-amber-600');
+            };
+
+            recognition.onerror = function(event) {
+                console.error('❌ Erreur reconnaissance:', event.error);
+                isListening = false;
+                button.textContent = '🎤';
+                button.classList.remove('bg-red-600');
+                button.classList.add('bg-amber-600');
+                alert(`Erreur reconnaissance vocale: ${event.error}`);
+            };
+
+            recognition.start();
+        }
+
+        // Fonctions de test
+        async function testAPI() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = 'Test API en cours...';
+
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                results.innerHTML = `<div class="text-green-400">✓ API OK - ${data.status}</div>`;
+            } catch (error) {
+                results.innerHTML = `<div class="text-red-400">✗ API Erreur: ${error.message}</div>`;
+            }
+        }
+
+        async function testBooks() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = 'Test livres en cours...';
+
+            try {
+                const response = await fetch('/api/books');
+                const data = await response.json();
+                results.innerHTML = `<div class="text-green-400">✓ Livres OK - ${data.total_books} disponibles</div>`;
+            } catch (error) {
+                results.innerHTML = `<div class="text-red-400">✗ Livres Erreur: ${error.message}</div>`;
+            }
+        }
+
+        async function testQuery() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = 'Test question en cours...';
+
+            try {
+                const response = await fetch('/api/query/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: 'Test simple' })
+                });
+                const data = await response.json();
+                results.innerHTML = `<div class="text-green-400">✓ Question OK - Confiance: ${data.confidence}%</div>`;
+            } catch (error) {
+                results.innerHTML = `<div class="text-red-400">✗ Question Erreur: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

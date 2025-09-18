@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Test - Rabbi Nachman Assistant</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #1a365d;
+            color: white;
+        }
+        .test-button {
+            background: #f6ad55;
+            color: #1a365d;
+            border: none;
+            padding: 15px 30px;
+            margin: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .test-button:hover { background: #ed8936; }
+        .result {
+            background: #2d3748;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #f6ad55;
+        }
+        .error { border-left-color: #e53e3e; }
+        .success { border-left-color: #38a169; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Debug Test - Rabbi Nachman Voice Assistant</h1>
+
+    <h2>Tests Basiques</h2>
+    <button class="test-button" onclick="testBasic()">1. Test JavaScript Basique</button>
+    <button class="test-button" onclick="testAPI()">2. Test API Status</button>
+    <button class="test-button" onclick="testQuery()">3. Test Question Simple</button>
+    <button class="test-button" onclick="testMicrophone()">4. Test Microphone</button>
+
+    <div id="results"></div>
+
+    <script>
+        function addResult(test, status, message) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${status}`;
+            div.innerHTML = `
+                <strong>${test}:</strong>
+                <span style="color: ${status === 'success' ? '#68d391' : '#fc8181'}">${status.toUpperCase()}</span><br>
+                ${message}
+            `;
+            results.appendChild(div);
+        }
+
+        function testBasic() {
+            try {
+                addResult('JavaScript Basique', 'success', 'JavaScript fonctionne correctement');
+
+                // Test DOM manipulation
+                const testDiv = document.createElement('div');
+                testDiv.textContent = 'Test DOM réussi';
+                addResult('DOM Manipulation', 'success', 'Création et manipulation d\'éléments OK');
+
+            } catch (error) {
+                addResult('JavaScript Basique', 'error', `Erreur: ${error.message}`);
+            }
+        }
+
+        async function testAPI() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                if (response.ok) {
+                    addResult('API Status', 'success', `
+                        Serveur opérationnel<br>
+                        Livres: ${data.database.books_count}<br>
+                        Chunks: ${data.database.chunks_count}
+                    `);
+                } else {
+                    addResult('API Status', 'error', `HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                addResult('API Status', 'error', `Erreur de connexion: ${error.message}`);
+            }
+        }
+
+        async function testQuery() {
+            try {
+                const response = await fetch('/api/query/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: 'Test simple' })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    addResult('Question Simple', 'success', `
+                        Réponse reçue<br>
+                        Confiance: ${data.confidence}%<br>
+                        Sources: ${data.total_sources}
+                    `);
+                } else {
+                    addResult('Question Simple', 'error', `HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                addResult('Question Simple', 'error', `Erreur: ${error.message}`);
+            }
+        }
+
+        function testMicrophone() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                addResult('Microphone', 'error', 'API microphone non supportée par le navigateur');
+                return;
+            }
+
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    stream.getTracks().forEach(track => track.stop());
+                    addResult('Microphone', 'success', 'Accès microphone autorisé');
+                })
+                .catch(error => {
+                    addResult('Microphone', 'error', `Accès refusé: ${error.message}`);
+                });
+        }
+
+        // Test automatique au chargement
+        window.onload = function() {
+            addResult('Chargement Page', 'success', 'Page debug chargée avec succès');
+        };
+    </script>
+</body>
+</html>
